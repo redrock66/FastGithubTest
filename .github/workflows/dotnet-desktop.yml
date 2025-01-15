@@ -1,0 +1,59 @@
+name: .NET 持续集成
+
+# 触发条件
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    # 检出代码
+    - uses: actions/checkout@v3
+    
+    # 设置.NET环境
+    - name: 安装 .NET SDK
+      uses: actions/setup-dotnet@v3
+      with:
+        dotnet-version: 6.x
+        
+    # 还原所有项目的NuGet包
+    - name: 还原依赖项
+      run: dotnet restore FastGithub.sln
+      
+    # 编译所有项目
+    - name: 编译所有项目
+      run: |
+        dotnet build FastGithub/FastGithub.csproj --configuration Release --no-restore
+        dotnet build FastGithub.Core/FastGithub.Core.csproj --configuration Release --no-restore
+        dotnet build FastGithub.Dns/FastGithub.Dns.csproj --configuration Release --no-restore
+        dotnet build FastGithub.Scanner/FastGithub.Scanner.csproj --configuration Release --no-restore
+        
+    # 发布所有客户端
+    - name: 发布客户端
+      run: |
+        dotnet publish FastGithub/FastGithub.csproj -c Release -o ./publish/FastGithub
+        dotnet publish FastGithub.Core/FastGithub.Core.csproj -c Release -o ./publish/FastGithub.Core
+        dotnet publish FastGithub.Dns/FastGithub.Dns.csproj -c Release -o ./publish/FastGithub.Dns
+        dotnet publish FastGithub.Scanner/FastGithub.Scanner.csproj -c Release -o ./publish/FastGithub.Scanner
+        
+    # 运行测试
+    - name: 运行测试
+      run: dotnet test FastGithub.sln --configuration Release --no-build --no-restore
+      
+    # 打包发布结果
+    - name: 打包发布结果
+      run: |
+        Compress-Archive -Path ./publish/* -DestinationPath ./publish/release.zip
+      shell: pwsh
+      
+    # 上传发布包
+    - name: 上传发布包
+      uses: actions/upload-artifact@v3
+      with:
+        name: release
+        path: ./publish/release.zip
